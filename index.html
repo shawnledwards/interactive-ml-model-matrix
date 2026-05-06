@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Model Selection Matrix</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a202c; min-height: 100vh; }
+
+  header { background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%); color: white; padding: 24px 32px; }
+  header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  header p { font-size: 13px; opacity: 0.8; }
+
+  .controls { padding: 16px 32px; background: white; border-bottom: 1px solid #e2e8f0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .filter-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; border: 1.5px solid #cbd5e1; background: white; cursor: pointer; font-size: 12px; font-weight: 500; color: #475569; transition: all 0.15s; }
+  .pill:hover { border-color: #2d6a9f; color: #2d6a9f; }
+  .pill.active { background: #2d6a9f; border-color: #2d6a9f; color: white; }
+  .pill-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .search-wrap { margin-left: auto; position: relative; }
+  .search-wrap input { padding: 7px 12px 7px 32px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px; width: 220px; outline: none; transition: border-color 0.15s; }
+  .search-wrap input:focus { border-color: #2d6a9f; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 13px; }
+
+  .matrix-wrap { padding: 24px 32px; overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 8px rgba(0,0,0,0.08); min-width: 900px; }
+
+  thead tr { background: #1e3a5f; }
+  th { padding: 12px 14px; text-align: left; font-size: 11px; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  th.model-col { min-width: 130px; text-align: center; background: #1a3356; }
+
+  tbody tr { border-bottom: 1px solid #f1f5f9; transition: background 0.12s; }
+  tbody tr:hover { background: #f8fafc; }
+  tbody tr.hidden { display: none; }
+
+  td { padding: 11px 14px; font-size: 13px; vertical-align: middle; }
+  td.use-case { font-weight: 600; color: #1e3a5f; }
+  td.industry { }
+  td.output { color: #475569; font-size: 12px; }
+  td.model-cell { text-align: center; }
+
+  .industry-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-retail { background: #dbeafe; color: #1d4ed8; }
+  .badge-healthcare { background: #d1fae5; color: #065f46; }
+  .badge-finance { background: #fef3c7; color: #92400e; }
+  .badge-energy { background: #ede9fe; color: #5b21b6; }
+  .badge-marketing { background: #fce7f3; color: #9d174d; }
+  .badge-operations { background: #fee2e2; color: #991b1b; }
+  .badge-crossindustry { background: #f1f5f9; color: #475569; }
+
+  .check { display: inline-block; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; line-height: 26px; font-weight: 700; }
+  .check-primary { background: #2d6a9f; color: white; }
+  .check-secondary { background: #dbeafe; color: #1d4ed8; font-size: 11px; }
+  .check-maybe { background: #fef3c7; color: #92400e; font-size: 10px; }
+  .check-no { color: #cbd5e1; font-size: 16px; }
+
+  .legend { display: flex; gap: 16px; padding: 12px 32px; font-size: 12px; background: white; border-top: 1px solid #e2e8f0; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; color: #475569; }
+
+  .detail-panel { display: none; position: fixed; right: 0; top: 0; height: 100vh; width: 340px; background: white; box-shadow: -4px 0 20px rgba(0,0,0,0.12); padding: 24px; overflow-y: auto; z-index: 100; }
+  .detail-panel.open { display: block; }
+  .detail-close { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; }
+  .detail-title { font-size: 17px; font-weight: 700; color: #1e3a5f; margin-bottom: 4px; padding-right: 24px; }
+  .detail-industry { margin-bottom: 16px; }
+  .detail-section { margin-bottom: 16px; }
+  .detail-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin-bottom: 6px; }
+  .detail-section p, .detail-section li { font-size: 13px; color: #475569; line-height: 1.6; }
+  .detail-section ul { padding-left: 16px; }
+  .model-tag { display: inline-block; margin: 2px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .model-tag.primary { background: #2d6a9f; color: white; }
+  .model-tag.secondary { background: #dbeafe; color: #1d4ed8; }
+  .model-tag.maybe { background: #fef3c7; color: #92400e; }
+  .row-link { cursor: pointer; }
+  .row-link td { cursor: pointer; }
+
+  .count-bar { padding: 4px 32px 0; font-size: 12px; color: #94a3b8; }
+
+  @media (max-width: 700px) {
+    .detail-panel { width: 100%; }
+    header { padding: 16px; }
+    .controls { padding: 12px 16px; }
+    .matrix-wrap { padding: 12px 8px; }
+    .legend { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ML Model Selection Matrix</h1>
+  <p>Map business use cases to the right machine learning model · Click any row for details</p>
+</header>
+
+<div class="controls">
+  <span class="filter-label">Industry:</span>
+  <button class="pill active" onclick="filterIndustry('all', this)">All</button>
+  <button class="pill" onclick="filterIndustry('Retail', this)"><span class="pill-dot" style="background:#1d4ed8"></span>Retail</button>
+  <button class="pill" onclick="filterIndustry('Healthcare', this)"><span class="pill-dot" style="background:#065f46"></span>Healthcare</button>
+  <button class="pill" onclick="filterIndustry('Finance', this)"><span class="pill-dot" style="background:#92400e"></span>Finance</button>
+  <button class="pill" onclick="filterIndustry('Energy', this)"><span class="pill-dot" style="background:#5b21b6"></span>Energy</button>
+  <button class="pill" onclick="filterIndustry('Marketing', this)"><span class="pill-dot" style="background:#9d174d"></span>Marketing</button>
+  <button class="pill" onclick="filterIndustry('Operations', this)"><span class="pill-dot" style="background:#991b1b"></span>Operations</button>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" placeholder="Search use cases…" oninput="filterSearch(this.value)">
+  </div>
+</div>
+
+<div class="count-bar" id="countBar">Showing all 20 use cases</div>
+
+<div class="matrix-wrap">
+<table id="mainTable">
+  <thead>
+    <tr>
+      <th style="min-width:200px">Business Use Case</th>
+      <th style="min-width:100px">Industry</th>
+      <th style="min-width:160px">Output (What's Predicted)</th>
+      <th class="model-col">Linear<br>Regression</th>
+      <th class="model-col">Logistic<br>Regression</th>
+      <th class="model-col">Decision<br>Tree / RF</th>
+      <th class="model-col">Neural<br>Network</th>
+      <th class="model-col">Clustering<br>(K-Means)</th>
+      <th class="model-col">Time<br>Series</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody">
+  </tbody>
+</table>
+</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="check check-primary">★</span> Best fit (primary model)</span>
+  <span class="legend-item"><span class="check check-secondary">✓</span> Good alternative</span>
+  <span class="legend-item"><span class="check check-maybe">~</span> Possible with caveats</span>
+  <span class="legend-item"><span class="check check-no">–</span> Not suitable</span>
+  <span style="margin-left:auto; color:#94a3b8; font-size:11px; align-self:center">Click any row to see full details</span>
+</div>
+
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" onclick="closeDetail()">✕</button>
+  <div class="detail-title" id="dpTitle"></div>
+  <div class="detail-industry" id="dpIndustry"></div>
+  <div class="detail-section"><h4>What's Being Predicted</h4><p id="dpOutput"></p></div>
+  <div class="detail-section"><h4>Why This Business Cares</h4><p id="dpWhy"></p></div>
+  <div class="detail-section"><h4>Typical Input Variables (X)</h4><ul id="dpInputs"></ul></div>
+  <div class="detail-section"><h4>Recommended Models</h4><div id="dpModels"></div></div>
+  <div class="detail-section"><h4>Key Consideration</h4><p id="dpNote"></p></div>
+</div>
+
+<script>
+const data = [
+  {
+    id: 1,
+    useCase: "Sales Forecasting",
+    industry: "Retail",
+    output: "Units sold / Revenue ($)",
+    why: "Enables quarterly planning, inventory allocation, and setting achievable sales targets.",
+    inputs: ["Advertising expenditure", "Historical sales", "Seasonality / time period", "Product price", "Discount %", "Region"],
+    note: "Core use case from the course. Linear regression works well when the relationship between ad spend and sales is approximately linear. Add time features for seasonality.",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "maybe", cluster: "no", ts: "secondary" }
+  },
+  {
+    id: 2,
+    useCase: "Marketing Budget Optimisation",
+    industry: "Marketing",
+    output: "Optimal spend allocation across channels",
+    why: "Determines how much to invest in advertising vs. discounts to hit a sales target at minimum cost.",
+    inputs: ["Advertising spend", "Discount %", "Channel mix", "Historical conversion rates"],
+    note: "Regression coefficients directly answer 'if I increase spend by $X, sales go up by Y'. This is the key driver analysis objective.",
+    models: { lr: "primary", logr: "no", dt: "maybe", nn: "maybe", cluster: "no", ts: "no" }
+  },
+  {
+    id: 3,
+    useCase: "Price Optimisation",
+    industry: "Retail",
+    output: "Optimal product price to maximise revenue",
+    why: "Price is a lever the business controls directly. Understanding the price–demand relationship prevents over- or under-pricing.",
+    inputs: ["Current price", "Competitor prices", "Demand elasticity", "Region", "Customer segment"],
+    note: "Negative coefficient on price is expected (higher price → lower sales). Multiple regression needed to isolate price effect from advertising and other factors.",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "secondary", cluster: "no", ts: "no" }
+  },
+  {
+    id: 4,
+    useCase: "Customer Lifetime Value (CLV)",
+    industry: "Retail",
+    output: "Predicted total spend by customer over time ($)",
+    why: "Prioritise marketing effort toward high-value customers. Decide how much to spend on acquisition.",
+    inputs: ["Purchase frequency", "Average order value", "Recency", "Customer tenure", "Segment"],
+    note: "Regression estimates CLV as a continuous number. For 'will this customer churn?' (yes/no), switch to logistic regression.",
+    models: { lr: "primary", logr: "secondary", dt: "secondary", nn: "secondary", cluster: "secondary", ts: "no" }
+  },
+  {
+    id: 5,
+    useCase: "Inventory & Demand Planning",
+    industry: "Operations",
+    output: "Units to stock per SKU / location",
+    why: "Prevents stockouts and overstocking. Ties directly to sales forecasts.",
+    inputs: ["Sales forecast", "Lead time", "Seasonality", "Historical demand", "Promotions"],
+    note: "Often downstream of a sales forecasting regression. Time series models can also capture temporal patterns.",
+    models: { lr: "secondary", logr: "no", dt: "secondary", nn: "maybe", cluster: "no", ts: "primary" }
+  },
+  {
+    id: 6,
+    useCase: "Medical Insurance Premium",
+    industry: "Healthcare",
+    output: "Annual premium amount ($)",
+    why: "Actuarially fair pricing; ensures the insurer can cover expected claims while remaining competitive.",
+    inputs: ["Age", "Blood pressure", "Blood sugar", "Smoking status", "BMI", "Prior claims history"],
+    note: "Categorical inputs (e.g., smoker/non-smoker) need one-hot encoding. Regulatory constraints may limit permissible variables (e.g., gender in some regions).",
+    models: { lr: "primary", logr: "maybe", dt: "secondary", nn: "secondary", cluster: "no", ts: "no" }
+  },
+  {
+    id: 7,
+    useCase: "Drug Dose Optimisation",
+    industry: "Healthcare",
+    output: "Optimal drug dose (mg) for a patient",
+    why: "Personalised dosing improves efficacy and reduces adverse effects.",
+    inputs: ["Patient weight", "Age", "Kidney function", "Drug concentration in blood", "Prior response"],
+    note: "Requires careful validation against clinical data. Non-linear relationships may require polynomial regression or neural networks.",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "secondary", cluster: "no", ts: "no" }
+  },
+  {
+    id: 8,
+    useCase: "Patient Length of Stay",
+    industry: "Healthcare",
+    output: "Estimated hospital stay duration (days)",
+    why: "Enables bed management, staffing, and cost estimation for the hospital and insurer.",
+    inputs: ["Diagnosis", "Age", "Comorbidities", "Procedure type", "Admission type"],
+    note: "Linked to drug dose and insurance problems — optimal medication reduces length of stay. Categorical diagnosis variables need encoding.",
+    models: { lr: "primary", logr: "maybe", dt: "secondary", nn: "secondary", cluster: "no", ts: "no" }
+  },
+  {
+    id: 9,
+    useCase: "Credit Card Limit Assignment",
+    industry: "Finance",
+    output: "Credit limit ($) assigned to customer",
+    why: "Balances risk (default) with opportunity (customer spending). Wrong limits cost revenue or create bad debt.",
+    inputs: ["Past spending behaviour", "Income", "Employment status", "Payment history", "Demographics"],
+    note: "Regression predicts the limit amount. A companion logistic regression model often predicts default probability (yes/no).",
+    models: { lr: "primary", logr: "secondary", dt: "secondary", nn: "secondary", cluster: "secondary", ts: "no" }
+  },
+  {
+    id: 10,
+    useCase: "Credit Scoring / Risk Assessment",
+    industry: "Finance",
+    output: "Credit score (number) OR default probability (%)",
+    why: "Determines who qualifies for loans and at what rate. Fundamental to lending operations.",
+    inputs: ["Payment history", "Debt-to-income ratio", "Length of credit history", "Outstanding balances", "Enquiries"],
+    note: "If output is a continuous score → linear regression. If output is 'will they default? yes/no' → logistic regression. Both are often used together.",
+    models: { lr: "secondary", logr: "primary", dt: "secondary", nn: "maybe", cluster: "no", ts: "no" }
+  },
+  {
+    id: 11,
+    useCase: "Investment Return Forecasting",
+    industry: "Finance",
+    output: "Expected portfolio return (%)",
+    why: "Asset allocation, portfolio construction, and central bank interest rate modelling all depend on return estimates.",
+    inputs: ["Historical returns", "Macro indicators", "Sector performance", "Interest rates", "Market volatility"],
+    note: "High-stakes domain. Linear relationships are a starting assumption. Non-linear effects (regime changes) may require neural networks or ensemble methods.",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "secondary", cluster: "no", ts: "primary" }
+  },
+  {
+    id: 12,
+    useCase: "Power Load Forecasting",
+    industry: "Energy",
+    output: "Energy demand (MW) at a future time",
+    why: "Prevents grid outages by ensuring supply matches demand. Critical for smart city infrastructure.",
+    inputs: ["Temperature", "Day of week", "Time of day", "Historical load", "Industrial activity", "Holidays"],
+    note: "Strong time-of-day and seasonal patterns make time series a natural fit. Regression with time features (dummy variables for hour/day) also works well.",
+    models: { lr: "secondary", logr: "no", dt: "secondary", nn: "secondary", cluster: "no", ts: "primary" }
+  },
+  {
+    id: 13,
+    useCase: "Carbon Emission Estimation",
+    industry: "Energy",
+    output: "CO₂ emissions (tonnes) from a source or region",
+    why: "Regulatory compliance, ESG reporting, and sustainability planning all require credible emission estimates.",
+    inputs: ["Energy consumption", "Fuel type", "Production volume", "Transport distance", "Equipment age"],
+    note: "Regression quantifies contribution of each source. Useful for 'what if' analysis (e.g., switching fuel types reduces emissions by X tonnes).",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "maybe", cluster: "no", ts: "secondary" }
+  },
+  {
+    id: 14,
+    useCase: "Renewable Energy Production",
+    industry: "Energy",
+    output: "Expected energy output (MWh) from wind/solar",
+    why: "Grid operators need to know how much renewable energy will be available to plan backup generation.",
+    inputs: ["Wind speed", "Solar irradiance", "Temperature", "Cloud cover", "Panel/turbine capacity"],
+    note: "Geophysical variables dominate. Non-linear relationships (e.g., wind turbine cut-in/cut-out speeds) may benefit from tree-based models.",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "secondary", cluster: "no", ts: "secondary" }
+  },
+  {
+    id: 15,
+    useCase: "House Price Prediction",
+    industry: "Finance",
+    output: "Market value of a property ($)",
+    why: "Valuation for mortgages, investment decisions, and property tax assessment.",
+    inputs: ["Square footage", "Location / postcode", "Number of bedrooms", "Age of property", "Nearby amenities"],
+    note: "Classic regression teaching example from the course. Location is categorical (use one-hot). Non-linearity (diminishing returns on size) often benefits from tree models.",
+    models: { lr: "primary", logr: "no", dt: "primary", nn: "secondary", cluster: "no", ts: "no" }
+  },
+  {
+    id: 16,
+    useCase: "Customer Churn Prediction",
+    industry: "Retail",
+    output: "Probability of customer leaving (0–1)",
+    why: "Retaining existing customers is far cheaper than acquiring new ones. Identify at-risk customers early.",
+    inputs: ["Tenure", "Usage frequency", "Support tickets", "Last purchase date", "Discount usage", "NPS score"],
+    note: "Output is YES/NO (will they churn?) — this is a classification problem, NOT regression. Logistic regression is the natural starting point.",
+    models: { lr: "no", logr: "primary", dt: "primary", nn: "secondary", cluster: "secondary", ts: "no" }
+  },
+  {
+    id: 17,
+    useCase: "Fraud Detection",
+    industry: "Finance",
+    output: "Fraudulent transaction: Yes / No",
+    why: "Protect customers and limit financial losses. Real-time scoring of transactions is critical.",
+    inputs: ["Transaction amount", "Location", "Time of day", "Merchant type", "Velocity of transactions", "Device fingerprint"],
+    note: "Binary output (fraud/not fraud) → classification problem. Extreme class imbalance is a key challenge. Linear regression is NOT appropriate here.",
+    models: { lr: "no", logr: "secondary", dt: "primary", nn: "primary", cluster: "secondary", ts: "no" }
+  },
+  {
+    id: 18,
+    useCase: "Customer Segmentation",
+    industry: "Marketing",
+    output: "Segment labels (e.g., High-value, At-risk, New)",
+    why: "Tailor marketing messages, offers, and service levels to each segment rather than blasting everyone.",
+    inputs: ["RFM metrics (recency, frequency, monetary)", "Demographics", "Product preferences", "Channel behaviour"],
+    note: "No target variable — this is unsupervised learning. Clustering (K-Means) is the primary tool. Regression cannot segment; it predicts a number.",
+    models: { lr: "no", logr: "no", dt: "maybe", nn: "maybe", cluster: "primary", ts: "no" }
+  },
+  {
+    id: 19,
+    useCase: "Sentiment Analysis / NLP Scoring",
+    industry: "Marketing",
+    output: "Sentiment score or positive/negative label",
+    why: "Understand customer feedback at scale. Track brand perception. Route support tickets.",
+    inputs: ["Text features (TF-IDF, word embeddings)", "Review length", "Star rating", "Source platform"],
+    note: "Many text features go into predicting one number (sentiment score) — this is conceptually a regression/classification problem but text preprocessing dominates the complexity.",
+    models: { lr: "maybe", logr: "secondary", dt: "maybe", nn: "primary", cluster: "maybe", ts: "no" }
+  },
+  {
+    id: 20,
+    useCase: "Supply Chain / Lead Time Prediction",
+    industry: "Operations",
+    output: "Estimated delivery time (days)",
+    why: "Reduce stockouts and customer complaints. Enable realistic promise dates at order time.",
+    inputs: ["Supplier location", "Order volume", "Transport mode", "Historical lead times", "Seasonality", "Carrier performance"],
+    note: "Regression predicts a continuous number (days). Disruptions (binary events like port strikes) may benefit from classification models as a layer on top.",
+    models: { lr: "primary", logr: "no", dt: "secondary", nn: "maybe", cluster: "no", ts: "secondary" }
+  }
+];
+
+const badgeClass = { Retail: 'badge-retail', Healthcare: 'badge-healthcare', Finance: 'badge-finance', Energy: 'badge-energy', Marketing: 'badge-marketing', Operations: 'badge-operations' };
+const modelKeys = ['lr', 'logr', 'dt', 'nn', 'cluster', 'ts'];
+
+function renderCheck(level) {
+  if (level === 'primary')   return '<span class="check check-primary" title="Best fit">★</span>';
+  if (level === 'secondary') return '<span class="check check-secondary" title="Good alternative">✓</span>';
+  if (level === 'maybe')     return '<span class="check check-maybe" title="Possible with caveats">~</span>';
+  return '<span class="check check-no" title="Not suitable">–</span>';
+}
+
+let activeIndustry = 'all';
+let searchTerm = '';
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  let visible = 0;
+  tbody.innerHTML = data.map(d => {
+    const industryMatch = activeIndustry === 'all' || d.industry === activeIndustry;
+    const searchMatch = !searchTerm || d.useCase.toLowerCase().includes(searchTerm) || d.industry.toLowerCase().includes(searchTerm) || d.output.toLowerCase().includes(searchTerm);
+    const show = industryMatch && searchMatch;
+    if (show) visible++;
+    return `<tr class="row-link${show ? '' : ' hidden'}" onclick="openDetail(${d.id})">
+      <td class="use-case">${d.useCase}</td>
+      <td><span class="industry-badge ${badgeClass[d.industry] || 'badge-crossindustry'}">${d.industry}</span></td>
+      <td class="output">${d.output}</td>
+      ${modelKeys.map(k => `<td class="model-cell">${renderCheck(d.models[k])}</td>`).join('')}
+    </tr>`;
+  }).join('');
+  document.getElementById('countBar').textContent = `Showing ${visible} of ${data.length} use cases`;
+}
+
+function filterIndustry(industry, btn) {
+  activeIndustry = industry;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+function filterSearch(val) {
+  searchTerm = val.toLowerCase();
+  renderTable();
+}
+
+function openDetail(id) {
+  const d = data.find(x => x.id === id);
+  document.getElementById('dpTitle').textContent = d.useCase;
+  document.getElementById('dpIndustry').innerHTML = `<span class="industry-badge ${badgeClass[d.industry] || 'badge-crossindustry'}">${d.industry}</span>`;
+  document.getElementById('dpOutput').textContent = d.output;
+  document.getElementById('dpWhy').textContent = d.why;
+  document.getElementById('dpInputs').innerHTML = d.inputs.map(i => `<li>${i}</li>`).join('');
+  const modelNames = { lr: 'Linear Regression', logr: 'Logistic Regression', dt: 'Decision Tree / RF', nn: 'Neural Network', cluster: 'Clustering', ts: 'Time Series' };
+  const modelClass = { primary: 'primary', secondary: 'secondary', maybe: 'maybe' };
+  document.getElementById('dpModels').innerHTML = modelKeys
+    .filter(k => d.models[k] !== 'no')
+    .map(k => `<span class="model-tag ${modelClass[d.models[k]]}">${modelNames[k]}</span>`)
+    .join('');
+  document.getElementById('dpNote').textContent = d.note;
+  document.getElementById('detailPanel').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+renderTable();
+</script>
+</body>
+</html>
